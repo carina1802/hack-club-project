@@ -10,19 +10,57 @@
         {
             name:"Trevi Fountain",
             coordinates:[41.9009, 12.4833]
+        },
+        {
+            name:"Pantheon",
+            coordinates:[41.8986, 12.4769]
         }
     ];
-    stops.forEach(function(stop){
-        L.marker(stop.coordinates).addTo(map)
-            .bindPopup(stop.name);
+    const markers=[];
+    let routeLayer=null;
+    stops.forEach(function(stop,index){
+        const marker=L.marker(stop.coordinates).addTo(map);
+        marker.bindPopup("<strong>"+(index+1)+"."+stop.name+"</strong>");
+        markers.push(marker);
     });
-    const routeCoordinates=stops.map(function(stop){
-        return stop.coordinates;
-    });
-    L.polyline(routeCoordinates, {
-        color:'#23775b',
-        weight:5,
-    }).addTo(map);
+    async function drawRoute(){
+        const routeCoordinates=stops.map(function(stop){
+        return stop.coordinates[1]+","+stop.coordinates[0];
+    }).join(";");
+    const url="https://router.project-osrm.org/route/v1/driving/"+routeCoordinates+"?overview=full&geometries=geojson";
+    try{
+        const response=await fetch(url);
+        if(!response.ok){
+            throw new Error("Routing device request failed");
+        }
+        const data=await response.json();
+        if(data.code !=="Ok"||!data.routes.length){
+            throw new Error("No route found");
+        }
+        const route=data.routes[0];
+        if(routeLayer){
+            map.removeLayer(routeLayer);
+        }
+        routeLayer=L.geoJSON(route.geometry,{
+            style:{
+                color:'#23775b',
+                weight:5,
+                opacity:0.85
+            }
+        }).addTo(map);
+        map.fitBounds(routeLayer.getBounds(),{
+            padding:[30,30]
+        });
+        const distance = (route.distance/1000).toFixed(2);
+        const duration = Math.round(route.duration/60);
+
+        console.log("Route distance:"+distance+"km");
+        console.log("Estimated driving time:"+duration+"minutes");
+    }catch(error){
+        console.error("Error fetching route:",error);
+    }
+    }
+    drawRoute();
     const form = document.getElementById('trip-form');
     const summary = document.getElementById('trip-summary');
     form.addEventListener('submit', function(event){
