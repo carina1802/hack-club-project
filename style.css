@@ -70,10 +70,10 @@ input[type="date"]{
     width:100%;
     max-width:100%;
     min-width:0;
-    padding:8px;
+    padding:10px;
     font-size:14px;
-    -webkit-appearance:none;
-    appearance:none;
+    font-family:inherit;
+    height:43px;
 }
 button{
     border:none;
@@ -107,9 +107,5 @@ button:hover{
     }
     #map{
         height: 360px;
-    }
-    input[type="date"]{
-        font-size: 14px;
-        padding:8px 6px;
     }
 }
