@@ -67,6 +67,9 @@ input{
     font:inherit;
 }
 input[type="date"]{
+    box-sizing:border-box;
+    display:block;
+    margin: 0 0 8px;
     width:100%;
     max-width:100%;
     min-width:0;
@@ -74,6 +77,9 @@ input[type="date"]{
     font-size:14px;
     font-family:inherit;
     height:43px;
+    color:#20302b;
+    border:1px solid #ccd7d1;
+    border-radius:8px;
 }
 button{
     border:none;
