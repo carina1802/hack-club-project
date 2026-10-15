@@ -18,6 +18,26 @@
             <form id="trip-form">
                 <label for="destination">Destination:</label>
                 <input type="text" id="destination" placeholder="e.g. Rome" required>
+                <fieldset class="category-filters">
+                    <legend>Discover places</legend>
+                    <label>
+                        <input type="checkbox" name="category" value="attraction" checked>
+                        Tourist attractions
+                    </label>
+                    <label>
+                        <input type="checkbox" name="category" value="museum" checked>
+                        Museums
+                    </label>
+                    <label>
+                        <input type="checkbox" name="category" value="restaurants" checked>
+                        Restaurants
+                    </label>
+                    <label>
+                        <input type="checkbox" name="category" value="cafe" checked>
+                        Cafés
+                    </label>
+                    <button typw="button">Find places</button>
+                </fieldset>
 
                 <label for="startDate">Start Date:</label>
                 <input type="date" id="startDate" required>
@@ -31,11 +51,15 @@
                 <button type="submit">Add Trip</button>
             </form>
             <p id="trip-summary">Enter your trip details to get started!</p>
+            <div id="places-status" role="status" aria-live="polite"></div>
+            <div id="places-list"></div>
+            <button type="button" id="build-route">Build route from selected places</button>
         </section>
         <section class="map-section">
             <h2>Explore your route</h2>
             <p>Click the markers to discover the stops</p>
             <div id="map"></div>
+        </section>
     </main>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="script.js"></script>
