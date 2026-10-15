@@ -56,8 +56,24 @@ input,button{
     font:inherit;
 }
 input{
+    display:block;
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    padding:10px;
     border:1px solid #ccd7d1;
+    border-radius:8px;
     margin-bottom: 8px;
+    font:inherit;
+}
+input[type="date"]{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    padding:8px;
+    font-size:14px;
+    -webkit-appearance:none;
+    appearance:none;
 }
 button{
     border:none;
@@ -91,5 +107,9 @@ button:hover{
     }
     #map{
         height: 360px;
+    }
+    input[type="date"]{
+        font-size: 14px;
+        padding:8px 6px;
     }
 }
