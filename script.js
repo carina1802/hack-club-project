@@ -7,109 +7,551 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
-    const stops=[
-        {
-            name:"Collosseum",
-            coordinates:[41.8902, 12.4922],
-            description:"The Colosseum is an ancient amphitheater in Rome, Italy, known for its iconic architecture and historical significance. It was used for gladiatorial contests and public spectacles."
-        },
-        {
-            name:"Trevi Fountain",
-            coordinates:[41.9009, 12.4833],
-            description:"The Trevi Fountain is a famous Baroque fountain in Rome, Italy, known for its stunning sculptures and the tradition of tossing coins into the water to ensure a return to the city."
-        },
-        {
-            name:"Pantheon",
-            coordinates:[41.8986, 12.4769],
-            description:"The Pantheon is a former Roman temple and is now a church in Rome, Italy. It is renowned for its massive dome and well-preserved ancient architecture."
-        }
-    ];
-    const markers=[];
+    let stops=[];
+    let foundPlaces=[];
+    let markers=[];
+    let selectedMarkers=[];
     let routeLayer=null;
-    stops.forEach(function(stop,index){
-        const customIcon=L.divIcon({
-            className:`stop-icon-container`,
-            html:`<div class="stop-marker"><span>${index+1}</span></div>`,
-            iconSize:[30,30],
-            iconAnchor:[15,15],
-            popupAnchor:[0,-18]
+    const placeMarkers = L.markerClusterGroup({
+        showCoverageOnHover:false,
+        spiderfyOnMaxZoom:true,
+        maxClusterRadius:50,
+        disableclusteringAtZoom:16
+    }).addTo(map);
+    const categoryLabels={
+        attraction: "Tourist attraction",
+        museum:"Museum",
+        restaurant:"Restaurant",
+        cafe:"Café"
+    }
+    function getPlaceCategory(tags){
+        if(tags.tourism==="museum") return "museum";
+        if(tags.amenity==="restaurant") return "restaurant";
+        if(tags.amenity==="cafe") return "cafe";
+        return "attraction";
+    }
+    function createPlaceIcon(number,selected=false){
+        return L.divIcon({
+            className:"custom-map-pin",
+            html: `
+                <div class="map-pin ${selected ? "is-selected" : ""}">
+                    <span>${number}</span>
+                </div>
+            `,
+            iconSize:[30,36],
+            iconAnchor:[15,32],
+            popupAnchor:[0,-30]
         });
-        const marker=L.marker(stop.coordinates,{
-            icon:customIcon,
-            title:stop.name,
-            alt:`Stop ${index+1}: ${stop.name}`
-        }).addTo(map);
-        marker.bindPopup(`
-            <div class="stop-popup">
-                <span class="stop-popup-number">STOP ${index+1}</span>
-                <h3>${stop.name}</h3>
-                <p>${stop.description}</p>
-            </div>
-        `,{
-            maxWidth:240,
-            minWidth:180,
-            className:'travel-popup'
-        });
+    }
+    function renderPlaces(places){
+        placeMarkers.clearLayers();
+        markers=[];
+        const placeList=document.getElementById("places-list");
+        placeList.replaceChildren();
+        places.forEach(function(place,index){
+            const customIcon=createPlaceIcon(index+1);
+            /*const customIcon=L.divIcon({
+                className:"stop-icon-container",
+                html:`<div class="stop-marker">${index+1}</div>`,
+                iconSize:[24,24],
+                iconAnchor:[12,12],
+                popupAnchor:[0,-15]
+            });*/
+            const marker=L.marker(place.coordinates,{
+                icon:customIcon,
+                title:place.name,
+                alt:place.name
+            }).addTo(placeMarkers);
+            marker.bindPopup(`
+                <div class="stop-popup">
+                    <span class="stop-popup-number">${categoryLabels[place.category]}</span>
+                    <h3>${place.name}</h3>
+                    <p>${place.address || "Address not available"}</p>
+                </div>
+            `,{
+                maxWidth:240,
+                minWidth:180,
+                className:'travel-popup'
+            });
         markers.push(marker);
-    });
-    async function drawRoute(){
+        const card=document.createElement("div");
+        card.className="place-result";
+        const checkbox=document.createElement("input");
+        checkbox.type="checkbox";
+        checkbox.id=`place-${index}`;
+        checkbox.value=String(index);
+        checkbox.setAttribute(
+            "aria-label",
+             `Select ${place.name}`
+        );
+        const label=document.createElement("label");
+        label.htmlFor=checkbox.id;
+        const name=document.createElement("strong");
+        name.textContent=place.name;
+        const details=document.createElement("small");
+        details.textContent=`${categoryLabels[place.category]} · ` + (place.address||"Address not available");
+        label.append(name,details);
+        card.append(checkbox,label);
+        placeList.appendChild(card);
+        checkbox.addEventListener("change", function(){
+            marker.setIcon(
+                createPlaceIcon(index+1,checkbox.checked)
+            );
+        });
+
+        marker.on("click", function(){
+            map.panTo(place.coordinates);
+        });
+        });
+        if(markers.length>0){
+            map.fitBounds(L.featureGroup(markers).getBounds(),
+                {
+                    padding:[30,30],
+                    maxZoom:14
+                }
+            );
+        }
+    }
+    async function fetchOverpassWithRetry(query,maxAttempts=3){
+        const endpoint="https://maps.mail.ru/osm/tools/overpass/api/interpreter";
+        for(let attempt=1;attempt<=maxAttempts;attempt++){
+            try{
+                const response = await fetch(endpoint,{
+                    method:"POST",
+                    headers:{
+                        "Content-Type":
+                            "application/x-www-form-urlencoded;charset=UTF-8",
+                        "Accept": "application/json"
+                    },
+                    body: new URLSearchParams({data:query})
+                });
+                if(!response.ok){
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return await response.json();
+            }catch (error){
+                console.warn(
+                    `Overpass attempt ${attempt}/${maxAttempts} failed:`,
+                    error.message
+                );
+                if(attempt===maxAttempts){
+                    throw error;
+                }
+                await new Promise(resolve=>setTimeout(resolve,1500*attempt));
+            }
+        }
+    }
+    async function searchPlaces(){
+        const destination=document.getElementById("destination").value.trim();
+        const status=document.getElementById("places-status");
+        if(!destination){
+            status.textContent="Please enter a destination";
+            return;
+        }
+        const selectedCategories=Array.from(
+            document.querySelectorAll('input[name="category"]:checked')
+        ).map(function(checkbox){
+            return checkbox.value;
+        });
+        if(selectedCategories.length===0){
+            status.textContent="Select at least one category";
+            return;
+        }
+        status.textContent=`Searching for places in ${destination}...`;
+        try{
+            const geocodingURL=new URL(
+                "https://nominatim.openstreetmap.org/search"
+            );
+            geocodingURL.search=new URLSearchParams({
+                q:destination,
+                format: "jsonv2",
+                limit:"1"
+            }).toString();
+            const cityResponse=await fetch(geocodingURL);
+            if(!cityResponse.ok){
+                throw new Error("Could not search for this city");
+            }
+            const cityResults=await cityResponse.json();
+            if(cityResults.length===0){
+                status.textContent="City not found. Check the spelling";
+                return;
+            }
+            const city=cityResults[0];
+            const lat=Number(city.lat);
+            const lon=Number(city.lon);
+            map.setView([lat,lon],13);
+            const categoryQueries={
+                attraction:
+                    `nwr(around:2000,${lat},${lon})`+
+                    `["tourism"="attraction"];`,
+                museum:
+                    `nwr(around:2000,${lat},${lon})`+
+                    `["tourism"="museum"];`,
+                restaurant:
+                    `nwr(around:2000,${lat},${lon})` +
+                    `["amenity"="restaurant"];`,
+                cafe:
+                    `nwr(around:2000,${lat},${lon})` +
+                    '["amenity"="cafe"];'
+            };
+            const resultLimitPerCategory=60;
+            const allElements=[];
+            const failedCategories=[];
+            const endpoint="https://maps.mail.ru/osm/tools/overpass/api/interpreter";
+            for(const category of selectedCategories){
+                const categoryQwery=categoryQueries[category];
+                if(!categoryQwery) continue;
+                const overpassQuery=
+                    `[out:json][timeout:25];\n(` +
+                    categoryQwery +
+                    `\n);\nout center tags ${resultLimitPerCategory};`;
+                try{
+                    const data=await fetchOverpassWithRetry(overpassQuery);
+                    const categoryElements=data.elements ||[];
+                    console.log(`${categoryLabels[category]}:${categoryElements.length} results`);
+                    allElements.push(...categoryElements);
+                } catch (error){
+                    console.error(
+                        `Failed to load ${categoryLabels[category]}:`,
+                        error.message
+                    );
+                    failedCategories.push(category);
+                }
+            }
+            const uniqueElements=[
+                ...new Map(
+                    allElements.map(element=>[
+                        `${element.type}-${element.id}`,
+                        element
+                    ])
+                ).values()
+            ];
+            console.log("Total unique elements:",uniqueElements.length);
+            foundPlaces=uniqueElements.map(function(element){
+                const tags=element.tags || {};
+                const latitude = element.lat ?? element.center?.lat;
+                const longitude = element.lon ?? element.center?.lon;
+                if(latitude===undefined || longitude===undefined){
+                    return null;
+                }
+                const category=getPlaceCategory(tags);
+                if(!selectedCategories.includes(category)){
+                    return null;
+                }
+                const name=tags.name || tags.brand;
+                if(!name){
+                    return null;
+                }
+                return {
+                    id:`${element.type}-${element.id}`,
+                    name:name,
+                    category:category,
+                    coordinates:[
+                        Number(latitude),
+                        Number(longitude)
+                    ],
+                    address:[
+                        tags["addr:street"],
+                        tags["addr:housenumber"],
+                        tags["addr:city"]
+                    ].filter(Boolean).join(" ")
+                };
+            }).filter(Boolean);
+            if(routeLayer){
+                map.removeLayer(routeLayer);
+                routeLayer=null;
+            }
+            stops=[];
+            selectedMarkers=[];
+            console.log("Places found:", foundPlaces);
+            renderPlaces(foundPlaces);
+            if(foundPlaces.length>0){
+                const categoryCounts={};
+                foundPlaces.forEach(function(place){
+                    categoryCounts[place.category]=(categoryCounts[place.category]||0)+1;
+                });
+                const summary=Object.entries(categoryCounts)
+                    .map(([category,count])=>{
+                        return `${categoryLabels[category]}:${count}`;
+                    }).join(" · ");
+                status.textContent=failedCategories.length>0
+                    ?`Found ${foundPlaces.length} places. Some categories failed to load. ${summary}`
+                    : `Found ${foundPlaces.length} places. ${summary}`;
+            }else if (failedCategories.length>0){
+                status.textContent="The places service is busy. Please try again shortly.";
+            }else{
+                status.textContent=`No places found near ${destination}. Try another category.`;
+            }
+        }catch(error){
+            console.error(error);
+            status.textContent=error.message || "An error occured while searching.";
+        }
+    }
+    document
+        .getElementById("search-places")
+        .addEventListener("click",searchPlaces);
+    /*async function drawRoute(){
+        if(stops.length<2){
+            document.getElementById("places-status").textContent="Select at least two places to build a route";
+            return;
+        }
         const routeCoordinates=stops.map(function(stop){
         return stop.coordinates[1]+","+stop.coordinates[0];
-    }).join(";");
-    const url="https://router.project-osrm.org/route/v1/driving/"+routeCoordinates+"?overview=full&geometries=geojson";
-    try{
-        const response=await fetch(url);
-        if(!response.ok){
-            throw new Error("Routing device request failed");
-        }
-        const data=await response.json();
-        if(data.code !=="Ok"||!data.routes.length){
-            throw new Error("No route found");
-        }
-        const route=data.routes[0];
-        if(routeLayer){
-            map.removeLayer(routeLayer);
-        }
-        const routeOutline=L.geoJSON(route.geometry,{
-            style:{
-                color:'#ffffff',
-                weight:9,
-                opacity:0.9,
-                lineCap:'round',
-                lineJoin:'round'
+        }).join(";");
+        const url="https://router.project-osrm.org/route/v1/driving/"+routeCoordinates+"?overview=full&geometries=geojson";
+        try{
+            const response=await fetch(url);
+            if(!response.ok){
+                throw new Error("Routing device request failed");
             }
-        });
-        const routeLine=L.geoJSON(route.geometry,{
-            style:{
-                color:'#23775b',
-                weight:5,
-                opacity:1,
-                lineCap:'round',
-                lineJoin:'round'
+            const data=await response.json();
+            if(data.code !=="Ok"||!data.routes.length){
+                throw new Error("No route found");
             }
-        });
-        routeLayer=L.featureGroup([
-            routeOutline,
-            routeLine
-        ]).addTo(map);
-        const allStops=L.featureGroup([
-            routeLayer,
-            ...markers
-        ]);
-        map.fitBounds(allStops.getBounds(),{
-            padding:[40,40],
-            maxZoom:15
-        });
-        const distance = (route.distance/1000).toFixed(2);
-        const duration = Math.round(route.duration/60);
+            const route=data.routes[0];
+            if(routeLayer){
+                map.removeLayer(routeLayer);
+            }
+            const routeOutline=L.geoJSON(route.geometry,{
+                style:{
+                    color:'#ffffff',
+                    weight:9,
+                    opacity:0.9,
+                    lineCap:'round',
+                    lineJoin:'round'
+                }
+            });
+            const routeLine=L.geoJSON(route.geometry,{
+                style:{
+                    color:'#23775b',
+                    weight:5,
+                    opacity:1,
+                    lineCap:'round',
+                    lineJoin:'round'
+                }
+            });
+            routeLayer=L.featureGroup([
+                routeOutline,
+                routeLine
+            ]).addTo(map);
+            const allStops=L.featureGroup([
+                routeLayer,
+                ...selectedMarkers
+            ]);
+            map.fitBounds(allStops.getBounds(),{
+                padding:[30,30],
+                maxZoom:14
+            });
+            const distance = (route.distance/1000).toFixed(2);
+            const duration = Math.round(route.duration/60);
 
-        console.log("Route distance:"+distance+"km");
-        console.log("Estimated driving time:"+duration+"minutes");
-    }catch(error){
-        console.error("Error fetching route:",error);
+            console.log("Route distance:"+distance+"km");
+            console.log("Estimated driving time:"+duration+"minutes");
+        }catch(error){
+            console.error("Error fetching route:",error);
+        }
+    }*/
+    function renderRoutezitinerary(route,optimized){
+        const container=document.getElemetnById("route-itinerary");
+        container.replaceChildren();
+        const header=document.createElement("div");
+        header.className="itinerary-header";
+        const title=document.createElement("h3");
+        title.textContent="Your itinerary";
+        const subtitle=document.createElement("p");
+        subtitle.textContent=optimized
+            ?"Stops reordered for a shorter driving route"
+            :"Stops in your selected order";
+        header.append(title,subtitle);
+        const stats=document.createElement("div");
+        stats.className="itinerary-status";
+        const distanceStat=document.createElement("div");
+        distanceStat.className="itinerary-stat";
+        const distanceLabel=document.createElement("span");
+        distanceLabel.textContent="Total distance";
+        const distanceValue=document.createElement("strong");
+        distanceValue.textContent=`${(route.distance/1000).toFixed(1)} km`;
+        distanceStat.append(distanceLabel,distanceValue);
+        const timeStat=document.createElement("div");
+        timeStat.className="itinerary-stat";
+        const timeLabel=document.createElement("span");
+        timeLabel.textContent="Estimated friving time";
+        const timeValue=document.createElement("strong");
+        const totalMinutes=Math.round(route.duration/60);
+        timeValue.textContent=totalMinutes<60
+            ?`${totalMinutes} min`
+            :`${Math.floor(totalMinutes/60)} h ${totalMinutes % 60} min`;
+        timeStat.append(timeLabel,timeValue);
+        stats.append(distanceStat,timeStat);
+        const list=document.createElement("ol");
+        list.className="itinerary-stops";
+        stops.forEach(function(stop,index){
+            const item=document.createElement("li");
+            item.className="itinerary-stop";
+            const number=document.createElement("span");
+            number.className="itinerary-number";
+            number.textContent=String(index+1);
+            const content=document.createElement("div");
+            content.className="itinerary-stop-content";
+            const name=document.createElement("strong");
+            name.textContent=stop.name;
+            const details=document.createElement("small");
+            details.textContent=
+                `${categoryLabels[stop.category]} · ` +
+                (stop.address || "Address not available");
+            content.append(name,details);
+            const leg=route.legs && route.legs[index];
+            const legInfo=document.createElement("span");
+            legInfo.className="itinerary-leg";
+            if(leg){
+                const legDistance=(leg.distance/1000).toFixed(1);
+                const legMinutes=Math.round(leg.duration/60);
+                legInfo.textContent=index<stops.length-1
+                    ?`Next stop · ${legDistance} km · about ${legMinutes} min`
+                    :`Final leg · ${legDistance} km · about ${legMinutes} min`;
+            }else{
+                legInfo.textContent="Final stop";
+            }
+            content.appendChild(legInfo);
+            item.append(number,content);
+            list.appendChild(item);
+        });
+        container.apper(header,stats,list);
     }
-    }
-    drawRoute();
+    async function drawRoute(){
+        const status=document.getElementById("places-status");
+        if(stops.length<2){
+            status.textContent="Select at least two places to build a route";
+            return;
+        }
+        const routeCoordinates=stops.map(function(stop){
+            return `${stop.coordinates[1]},${stop.coordinates[0]}`;
+        }).join(";");
+        let route;
+        let optimized=false;
+        try{
+            try{
+                const tripUrl=
+                "https://router.project-osrm.org/trip/v1/driving/"+
+                routeCoordinates +
+                "?roundtrip=false&source=first&destination=last" +
+                "&overview=full&geometries=geojson";
+
+                const tripResponse=await fetch(tripUrl);
+                if(!tripResponse.ok){
+                    throw new Error(`Trip service HTTP ${tripResponse.status}`);
+                }
+                const tripData=await tripResponse.json();
+                if(
+                    tripData.code !== "Ok" ||
+                    !tripData.trips ||
+                    !tripData.trips.length ||
+                    !tripData.waypoints
+                ){
+                    throw new Error("Could not optimize this group order");
+                }
+                const ordered=tripData.waypoints.map(
+                    function(waypoint,originalIndex){
+                        return{
+                            stop:stops[originalIndex],
+                            marker:selectedMarkers[originalIndex],
+                            waypointIndex:waypoint.waypoint_index
+                        };
+                    }
+                ).sort(function(a,b){
+                    return a.waypointIndex - b.waypointIndex;
+                });
+                stops = ordered.map(item=>item.stop);
+                selectedMarkers=ordered.map(item=>item.marker);
+                route=tripData.trips[0];
+                optimized=true;
+            }catch(optimizationError){
+                console.warn(
+                    "Stop optimization unavailable; using selected order.",
+                    optimizationError
+                );
+                const routeUrl=
+                    "https://router.project-osrm.org/route/v1/driving/" +
+                    routeCoordinates +
+                    "?overview=full&geometries=geojson";
+                const response=await fetch(routeUrl);
+                if(!response.ok){
+                    throw new Error(`Route service HTTP ${response.status}`);
+                }
+                const routeData=await response.json();
+                if(
+                    routeData.code!=="Ok"||
+                    !routeData.routes ||
+                    !routeData.routes.length
+                ){
+                    throw new Error("No driving route could be found.");
+                }
+                route=routeData.routes[0];
+            }
+            if(routeLayer){
+                map.removeLayer(routeLayer);
+            }
+            const routeOutline=L.geoJSON(route.geometry,{
+                style:{
+                    color:'#ffffff',
+                    weight:9,
+                    opacity:0.95,
+                    lineCap:"round",
+                    lineJoin:"round"
+                }
+            });
+            const routeLine=L.geoJSON(route.geometry,{
+                style:{
+                    color:"#23775b",
+                    weigth:5,
+                    opacity:1,
+                    lineCap:"round",
+                    lineJoin:"round"
+                }
+            });
+            routeLayer=L.featureGroup([
+                routeOutline,
+                routeLine
+            ]).addTo(map);
+            const allStops=L.featureGroup([
+                routeLayer,
+                ...selectedMarkers
+            ]);
+            map.fitBounds(allStops.getBounds(),{
+                padding:[35,35],
+                maxZoom:15
+            });
+            renderRoutezitinerary(route,optimized);
+            const distance=(route.distance/1000).toFixed(2);
+            const duration=Math.round(route.duration/60);
+            status.textContent=optimized
+                ?"Your driving route is ready. Stop order optimized."
+                :"Your driving route is ready in your selected stop order.";
+        }catch(error){
+            console.error("Error building route:", error);
+            status.textContent="Could not build the route. Please try again.";
+        }
+   }
+    document
+        .getElementById("build-route")
+        .addEventListener("click",function(){
+            const selectedIndexes=Array.from(
+                document.querySelectorAll('#places-list input[type="checkbox"]:checked')
+            ).map(function(checkbox){
+                return Number(checkbox.value);
+            });
+            stops=selectedIndexes.map(function(index){
+                return foundPlaces[index];
+            });
+            selectedMarkers=selectedIndexes.map(function(index){
+                return markers[index];
+            });
+            if(stops.length<2){
+                document.getElementById("places-status").textContent="Select at least two places to build a route";
+                return;
+            }
+            drawRoute();
+        });
     const form = document.getElementById('trip-form');
     const summary = document.getElementById('trip-summary');
     form.addEventListener('submit', function(event){

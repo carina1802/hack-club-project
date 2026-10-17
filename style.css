@@ -133,14 +133,23 @@ button:hover{
         height: 360px;
         border-radius:12px;
     }
+    .route-itinerary{
+        padding:16px;
+    }
+    .itinerary-stats{
+        gap:8px;
+    }
+    .itinerary-stat{
+        padding:11px;
+    }
 }
 .stop-icon-container{
     background:transparent;
     border:none;
 }
 .stop-marker{
-    width:30px;
-    height:30px;
+    width:24px;
+    height:24px;
     display:flex;
     align-items:center;
     border-radius:50%;
@@ -148,7 +157,7 @@ button:hover{
     border:2px solid white;
     background:#174c3c;
     color:white;
-    font-size:12px;
+    font-size:10px;
     font-weight:bold;
     box-shadow:0 2px 7px #123b304d;
 }
@@ -278,8 +287,170 @@ button:hover{
     margin-top:6px;
 }
 #build-route{
-    background:#174c3c;
+    background:#23775b;
 }
 #build-route:hover{
-    background:#123b30;
+    background:#174c3c;
+}
+.planner{
+    align-items:start;
+}
+.trip-form{
+    min-width:0;
+    min-height:0;
+    align-self:start;
+}
+#places-list{
+    max-height:320px;
+    overflow-y:auto;
+    overflow-x:hidden;
+    padding-right:6px;
+    overscroll-behavior:contain;
+}
+.place-result{
+    min-width:0;
+    overflow-wrap:anywhere;
+}
+#places-list{
+    scrollbar-width:thin;
+    scrollbar-color:#a7bdb2 transparent;
+}
+#places-list::-webkit-scrollbar{
+    width:6px;
+}
+#places-list::-webkit-scrolbar-thumb{
+    background:#a7bdb2;
+    border-radius:10px;
+}
+.map_section{
+    min-width:0;
+    min-height:0;
+    align-self:start;
+}
+.custom-map-pin{
+    background:transparent;
+    border:none;
+}
+.map-pin{
+    width:26px;
+    height:26px;
+    box-sizing:border-box;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#23775b;
+    color:white;
+    border:2px solid white;
+    border-radius:50% 50% 50% 0;
+    transform:roatate(-45deg);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    transition:background 0.2 ease, scale 0.2s ease;
+}
+.map-pin span{
+    font-size:11px;
+    font-weight:700;
+    line-height:1;
+    transform:rotate(45deg);
+}
+.map-pin.is-selected{
+    background:#e53935;
+    scale:1.12;
+    z-index:1000;
+}
+.route-itinerary{
+    margin-top:20px;
+    padding:22px;
+    background:#ffffff;
+    border:1px solid #e2ebe5;
+    border-radius:18px;
+    box-shadow:0 5px 18px rgba(25,65,45,0.07);
+    color:#20302b;
+}
+.route-itinerary:empty{
+    display:none;
+}
+.itinerary-header h3{
+    margin:0 0 6px;
+    font-size:20px;
+}
+.itinerary-header p{
+    margin:0;
+    color:#6c7c73;
+    font-size:13px;
+}
+.itinerary-stats{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin-bottom:20px;
+}
+.itinerary-stat{
+    padding:14px;
+    background:#f2f7f3;
+    border-radius:12px;
+}
+.itinerary-stat span{
+    display:block;
+    margin-bottom:5px;
+    color:#6c7c73;
+    font-size:12px;
+}
+.itinerary-stat strong{
+    font-size:18px;
+    color:#174c3c;
+}
+.itinerary-stops{
+    list-style:none;
+    margin:0;
+    padding:0;
+}
+.itinerary-stop{
+    display:grif;
+    grid-template-columns:34px minmax(0,1fr);
+    gap:12px;
+    position:relative;
+    padding-bottom:20px;
+}
+.itinerary-stop:last-child{
+    padding-bottom:0;
+}
+.itinerary-number{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:32px;
+    height:32px;
+    border-radius:50%;
+    background:#e53935;
+    color:#ffffff;
+    font-weight:700;
+    font-size:13px;
+    box-shadow:0 2px 5px rgba(229,57,53,0.2);
+}
+.itinerary-stop-content{
+    min-width:0;
+    padding:2px 0 0;
+}
+.itinerary-stop-content strong{
+    display:block;
+    font-size:14px;
+    line-height:1.4;
+    overflow-wrap:anywhere;
+}
+.itinerary-stop-content small{
+    display:block;
+    margin-top:4px;
+    color:#6c7c73;
+    font-size:12px;
+    line-height:1.5;
+}
+.itinerary-leg{
+    display:inline-block;
+    margin-top:8px;
+    padding:5px 9px;
+    background:#edf5ef;
+    border-radius:7px;
+    color:#23775b;
+    font-size:12px;
+    font-weight:600;
 }

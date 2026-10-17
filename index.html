@@ -6,6 +6,8 @@
     <title>Travel Planner</title>
     <link rel="stylesheet" href="./style.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 </head>
 <body>
     <header>
@@ -29,24 +31,24 @@
                         Museums
                     </label>
                     <label>
-                        <input type="checkbox" name="category" value="restaurants" checked>
+                        <input type="checkbox" name="category" value="restaurant" checked>
                         Restaurants
                     </label>
                     <label>
                         <input type="checkbox" name="category" value="cafe" checked>
                         Cafés
                     </label>
-                    <button typw="button">Find places</button>
+                    <button type="button" id="search-places">Find places</button>
                 </fieldset>
 
                 <label for="startDate">Start Date:</label>
-                <input type="date" id="startDate" required>
+                <input type="date" id="startDate">
 
                 <label for="endDate">End Date:</label>
-                <input type="date" id="endDate" required>
+                <input type="date" id="endDate">
 
                 <label for="budget">Budget:</label>
-                <input type="number" id="budget" min="0" required>
+                <input type="number" id="budget" min="0">
 
                 <button type="submit">Add Trip</button>
             </form>
@@ -59,9 +61,11 @@
             <h2>Explore your route</h2>
             <p>Click the markers to discover the stops</p>
             <div id="map"></div>
+            <div id="route-itinerary" class="route-itinerary" aria-live="polite"></div>
         </section>
     </main>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
