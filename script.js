@@ -49,97 +49,101 @@
         const placeList=document.getElementById("places-list");
         placeList.replaceChildren();
         places.forEach(function(place,index){
-            const customIcon=createPlaceIcon(index+1);
-            /*const customIcon=L.divIcon({
-                className:"stop-icon-container",
-                html:`<div class="stop-marker">${index+1}</div>`,
-                iconSize:[24,24],
-                iconAnchor:[12,12],
-                popupAnchor:[0,-15]
-            });*/
-            const marker=L.marker(place.coordinates,{
-                icon:customIcon,
-                title:place.name,
-                alt:place.name
-            }).addTo(placeMarkers);
-            marker.bindPopup(`
-                <div class="stop-popup">
-                    <span class="stop-popup-number">${categoryLabels[place.category]}</span>
-                    <h3>${place.name}</h3>
-                    <p>${place.address || "Address not available"}</p>
-                </div>
-            `,{
-                maxWidth:240,
-                minWidth:180,
-                className:'travel-popup'
+            markers[index]=null;
+            const card=document.createElement("div");
+            card.className="place-result";
+            const checkbox=document.createElement("input");
+            checkbox.type="checkbox";
+            checkbox.id=`place-${index}`;
+            checkbox.value=String(index);
+            checkbox.setAttribute(
+                "aria-label",
+                `Select ${place.name}`
+            );
+            const label=document.createElement("label");
+            label.htmlFor=checkbox.id;
+            const name=document.createElement("strong");
+            name.textContent=place.name;
+            const details=document.createElement("small");
+            details.textContent=`${categoryLabels[place.category]} · ` + (place.address||"Address not available");
+            label.append(name,details);
+            card.append(checkbox,label);
+            placeList.appendChild(card);
+            checkbox.addEventListener("change", function(){
+                if(checkbox.checked){
+                    const marker=L.marker(place.coordinates,{
+                        icon:createPlaceIcon(index+1,true),
+                        title:place.name,
+                        alt:place.name
+                    });
+                    marker.bindPopup(`
+                        <div class="stop-popup">
+                            <span class="stop-popup-number">
+                                ${categoryLabels[place.category]}
+                            </span>
+                            <h3>${place.name}</h3>
+                            <p>${place.address || "Address not available"}</p>
+                        </div>
+                    `,{
+                        maxWidth:240,
+                        minWidth:180,
+                        className:"travel-popup"
+                    });
+                    marker.on("click", function(){
+                        map.panTo(place.coordinates);
+                    });
+                    marker.addTo(placeMarkers);
+                    markers[index]=marker;
+                }else{
+                    if(markers[index]){
+                        placeMarkers.removeLayer(markers[index]);
+                        markers[index]=null;
+                    }
+                }
             });
-        markers.push(marker);
-        const card=document.createElement("div");
-        card.className="place-result";
-        const checkbox=document.createElement("input");
-        checkbox.type="checkbox";
-        checkbox.id=`place-${index}`;
-        checkbox.value=String(index);
-        checkbox.setAttribute(
-            "aria-label",
-             `Select ${place.name}`
-        );
-        const label=document.createElement("label");
-        label.htmlFor=checkbox.id;
-        const name=document.createElement("strong");
-        name.textContent=place.name;
-        const details=document.createElement("small");
-        details.textContent=`${categoryLabels[place.category]} · ` + (place.address||"Address not available");
-        label.append(name,details);
-        card.append(checkbox,label);
-        placeList.appendChild(card);
-        checkbox.addEventListener("change", function(){
-            marker.setIcon(
-                createPlaceIcon(index+1,checkbox.checked)
-            );
         });
-
-        marker.on("click", function(){
-            map.panTo(place.coordinates);
-        });
-        });
-        if(markers.length>0){
-            map.fitBounds(L.featureGroup(markers).getBounds(),
-                {
-                    padding:[30,30],
-                    maxZoom:14
-                }
-            );
-        }
     }
-    async function fetchOverpassWithRetry(query,maxAttempts=3){
-        const endpoint="https://maps.mail.ru/osm/tools/overpass/api/interpreter";
-        for(let attempt=1;attempt<=maxAttempts;attempt++){
+    async function fetchOverpassWithRetry(query){
+        const endpoints=[
+            "https://overpass-api.de/api/interpreter",
+            "https://overpass.kumi.systems/api/interpreter",
+            "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+        ];
+        let lastError;
+        for(const endpoint of endpoints){
             try{
-                const response = await fetch(endpoint,{
-                    method:"POST",
-                    headers:{
-                        "Content-Type":
-                            "application/x-www-form-urlencoded;charset=UTF-8",
-                        "Accept": "application/json"
-                    },
-                    body: new URLSearchParams({data:query})
-                });
-                if(!response.ok){
-                    throw new Error(`HTTP ${response.status}`);
+                const controller=new AbortController();
+                const timeoutId=setTimeout(()=>controller.abort(),20000);
+                try{
+                    const response=await fetch(endpoint,{
+                        method:"POST",
+                        headers:{
+                            "Content-Type":
+                                "application/x-www-form-urlencoded;charset=UTF-8",
+                            "Accept": "application/json"
+                        },
+                        body: new URLSearchParams({data:query}),
+                        signal:controller.signal
+                    });
+                    if(!response.ok){
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    const data=await response.json();
+                    if(!Array.isArray(data.elements)){
+                        throw new Error("Invalid response from places service");
+                    }
+                    return data;
+                }finally{
+                    clearTimeout(timeoutId);
                 }
-                return await response.json();
-            }catch (error){
+            }catch(error){
+                lastError=error;
                 console.warn(
-                    `Overpass attempt ${attempt}/${maxAttempts} failed:`,
+                    `Places server failed (${endpoint}):`,
                     error.message
                 );
-                if(attempt===maxAttempts){
-                    throw error;
-                }
-                await new Promise(resolve=>setTimeout(resolve,1500*attempt));
             }
-        }
+        }throw new Error("All places sedrvers are currently unavailable. Please try again.");
     }
     async function searchPlaces(){
         const destination=document.getElementById("destination").value.trim();
@@ -180,7 +184,33 @@
             const lat=Number(city.lat);
             const lon=Number(city.lon);
             map.setView([lat,lon],13);
-            const categoryQueries={
+            const categoryFilters={
+                attraction:'["tourism"="attraction"]',
+                museum:'["tourism"="museum"]',
+                restaurant:'["amenity"="restaurant"]',
+                cafe:'["amenity"="cafe"]'
+            };
+            const selectedQueries=selectedCategories
+                .filter(category=>categoryFilters[category])
+                .map(category=>`nwr(around:3500,${lat},${lon})${categoryFilters[category]};`);
+            const allElements=[];
+            const failedCategories=[];
+            if(selectedQueries.length>0){
+                const overpassQuery=
+                    "[out:json][timeout:20];\n(" +
+                    selectedQueries.join("\n") +
+                    "\n);\nout center tags 250;";
+                try{
+                    status.textContent=`Searching ${selectedCategories.length} categories in ${destination}...`;
+                    const data=await fetchOverpassWithRetry(overpassQuery);
+                    allElements.push(...data.elements);
+                }catch(error){
+                    console.error("All place-search servers failed:",error);
+                    failedCategories.push(...selectedCategories);
+                }
+
+            }
+            /*const categoryQueries={
                 attraction:
                     `nwr(around:2000,${lat},${lon})`+
                     `["tourism"="attraction"];`,
@@ -217,7 +247,7 @@
                     );
                     failedCategories.push(category);
                 }
-            }
+            }*/
             const uniqueElements=[
                 ...new Map(
                     allElements.map(element=>[
@@ -351,8 +381,8 @@
             console.error("Error fetching route:",error);
         }
     }*/
-    function renderRoutezitinerary(route,optimized){
-        const container=document.getElemetnById("route-itinerary");
+    function renderRoutesitinerary(route,optimized){
+        const container=document.getElementById("route-itinerary");
         container.replaceChildren();
         const header=document.createElement("div");
         header.className="itinerary-header";
@@ -375,7 +405,7 @@
         const timeStat=document.createElement("div");
         timeStat.className="itinerary-stat";
         const timeLabel=document.createElement("span");
-        timeLabel.textContent="Estimated friving time";
+        timeLabel.textContent="Estimated driving time";
         const timeValue=document.createElement("strong");
         const totalMinutes=Math.round(route.duration/60);
         timeValue.textContent=totalMinutes<60
@@ -416,7 +446,7 @@
             item.append(number,content);
             list.appendChild(item);
         });
-        container.apper(header,stats,list);
+        container.append(header,stats,list);
     }
     async function drawRoute(){
         const status=document.getElementById("places-status");
@@ -503,7 +533,7 @@
             const routeLine=L.geoJSON(route.geometry,{
                 style:{
                     color:"#23775b",
-                    weigth:5,
+                    weight:5,
                     opacity:1,
                     lineCap:"round",
                     lineJoin:"round"
@@ -561,4 +591,30 @@
         const endDate = document.getElementById('endDate').value;
         const budget = document.getElementById('budget').value;
         summary.textContent="Trip to "+destination+" from "+startDate+" to "+endDate+" with a budget of $"+budget;
+    });
+    const themeToggle=document.getElementById("theme-toggle");
+    const themeIcon=document.getElementById("theme-icon");
+    const themeLabel=document.getElementById("theme-label");
+    const savedTheme=localStorage.getItem("travel-planner-theme");
+    const initialTheme=savedTheme==="dark"?"dark":"light";
+    function applyTheme(theme){
+        document.body.dataset.theme=theme;
+        const isDark = theme === "dark";
+        themeIcon.textContent=isDark?"☀️":"🌙";
+        themeLabel.textContent=isDark?"Light mode":"Dark mode";
+        themeToggle.setAttribute(
+            "aria-label",
+            isDark?"Switch to light mode":"Switch to dark mode"
+        );
+        themeToggle.setAttribute(
+            "aria-pressed",
+            String(isDark)
+        );
+        localStorage.setItem("travel-planner-theme",theme);
+    }
+    applyTheme(initialTheme);
+    themeToggle.addEventListener("click",function(){
+        const currentTheme=document.body.dataset.theme;
+        const nextTheme=currentTheme==="dark"?"light":"dark";
+        applyTheme(nextTheme);
     });
