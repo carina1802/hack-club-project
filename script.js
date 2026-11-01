@@ -12,6 +12,11 @@
     let markers=[];
     let selectedMarkers=[];
     let routeLayer=null;
+    let userLocationMarker=null;
+    let userAccuracyCircle=null;
+    let locationWatchId=null;
+    let currentUserLocation=null;
+    let hasSearchedPlaces=false;
     const placeMarkers = L.markerClusterGroup({
         showCoverageOnHover:false,
         spiderfyOnMaxZoom:true,
@@ -36,28 +41,120 @@
             Math.sin(dLon/2)**2;
         return 2* earthRadius*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
     }
-    function getCurrentLocation(){
-        return new Promise(resolve=>{
-            if(!navigator.geolocation){
-                resolve(null);
-                return;
-            }
-            navigator.geolocation.getCurrentPosition(
-                position => {
-                    resolve({
-                        lat:position.coords.latitude,
-                        lon:position.coords.longitude
+    function startLiveLocation(){
+        const status=document.getElementById("places-status");
+        if(!navigator.geolocation){
+            status.textContent="Your browser does not support location access";
+            return;
+        }
+        status.textContent="Waiting for location permission...";
+        locationWatchId=navigator.geolocation.watchPosition(
+           function(position){
+                const lat=position.coords.latitude;
+                const lon=position.coords.longitude;
+                const accuracy=position.coords.accuracy;
+                const userPosition=[lat,lon];
+                currentUserLocation={
+                    lat:lat,
+                    lon:lon
+                };
+                if(!userLocationMarker){
+                    const userIcon=L.divIcon({
+                        className:"user-loction-icon",
+                        html:`
+                            <div class="user-location-pulse">
+                                <div class="user-location-dot"></div>
+                            </div>
+                        `,
+                        iconSize:[24,24],
+                        iconAnchor:[12,12]
                     });
-                },
-                ()=>resolve(null),
-                {
-                    enableHighAccuracy:false,
-                    timeout:5000,
-                    maximumAge:60000
+                    userLocationMarker=L.marker(userPosition,{
+                        icon:userIcon,
+                        zIndexOffset:1000,
+                        title:"Your current location"
+                    }).addTo(map);
+                    userLocationMarker.bindPopup("You are here");
+                    userAccuracyCircle=L.circle(userPosition,{
+                        radius:accuracy,
+                        color:"#7167d9",
+                        weight:1,
+                        fillColor:"#a99ff5",
+                        fillOpacity:0.15
+                    }).addTo(map);
+                    if(!hasSearchedPlaces){
+                        map.setView(userPosition,16);
+                    }
+                }else{
+                    userLocationMarker.setLatLng(userPosition);
+                    userAccuracyCircle.setLatLng(userPosition);
+                    userAccuracyCircle.setRadius(accuracy);
                 }
-            );
-        });
+                status.textContent="Your live location is active.";
+           },
+            function(error){
+                if(error.code===1){
+                    status.textContent="Location permission denied. You can still use the planner.";
+                }else if(error.code===2){
+                    status.textContent="Your location is currently unavailable.";
+                }else if(error.code===3){
+                    status.textContent="Location request timed out. Trying again when possible";
+                }
+            },
+            {
+                enableHighAccuracy:true,
+                timeout:15000,
+                maximumAge:5000
+            }
+        );
     }
+    function centerOnUser(){
+        if(currentUserLocation){
+            map.flyTo(
+                [currentUserLocation.lat, currentUserLocation.lon],
+                16,
+                {duration:1.2}
+            );
+            return;
+        }
+        if(!navigator.geolocation){
+            alert("Geolocation is not supported by your browser.");
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            function(position){
+                const lat=position.coords.latitude;
+                const lon=position.coords.longitude;
+                currentUserLocation={lat,lon};
+                map.flyTo([lat,lon],16,{duration:1.2});
+            },
+            function(){
+                alert("Your location is unavailable.Please check your browser permissions."); 
+            },
+            {
+                enableHighAccuracy:true,
+                timeout:15000,
+                maximumAge:5000
+            }
+        );
+    }
+    const locateControl=L.control({position:"topleft"});
+    locateControl.onAdd=function(){
+        const button=L.DomUtil.create(
+            "button",
+            "locate-me-button"
+        );
+        button.type="button";
+        button.innerHTML='<span class="locate-arrow">➤</span>';
+        button.title="Center the map on your current location";
+        L.DomEvent.disableClickPropagation(button);
+        L.DomEvent.on(button,"click",function(event){
+            L.DomEvent.preventDefault(event);
+            centerOnUser();
+        });
+        return button;
+    };
+    locateControl.addTo(map);
     function getPlaceCategory(tags){
         if(tags.tourism==="museum") return "museum";
         if(tags.amenity==="restaurant") return "restaurant";
@@ -226,9 +323,9 @@
             const city=cityResults[0];
             const lat=Number(city.lat);
             const lon=Number(city.lon);
-            status.textContent="Checking location permission and searching for places...";
-            const currentLocation=await getCurrentLocation();
-            const sortOrigin=currentLocation||{
+            status.textContent="Searching for places...";
+            hasSearchedPlaces=true;
+            const sortOrigin=currentUserLocation||{
                 lat:lat,
                 lon:lon
             };
@@ -357,7 +454,7 @@
     document
         .getElementById("search-places")
         .addEventListener("click",searchPlaces);
-    function renderRoutesItinerary(route,optimized){
+    /*function renderRoutesItinerary(route,optimized){
         const container=document.getElementById("route-itinerary");
         container.replaceChildren();
         const header=document.createElement("div");
@@ -535,7 +632,7 @@
             });
             const routeLine=L.geoJSON(route.geometry,{
                 style:{
-                    color:"#23775b",
+                    color:"#7167d9",
                     weight:5,
                     opacity:1,
                     lineCap:"round",
@@ -564,12 +661,263 @@
             console.error("Error building route:", error);
             status.textContent="Could not build the route. Please try again.";
         }
-   }
+   }*/
+    function renderRoutesItinerary(route){
+        const container=document.getElementById("route-itinerary");
+        container.replaceChildren();
+        const header=document.createElement("div");
+        header.className="itinerary-header";
+        const title=document.createElement("h3");
+        title.textContent="Your itinerary";
+        const subtitle=document.createElement("p");
+        subtitle.textContent="Stops in your selected order";
+        header.append(title,subtitle);
+        const stats=document.createElement("div");
+        stats.className="itineary-stats";
+        const distanceStat=document.createElement("div");
+        distanceStat.className="itinerary-stat";
+        const distanceLabel=document.createElement("span");
+        distanceLabel.textContent="Total distance";
+        const distanceValue=document.createElement("strong");
+        distanceValue.textContent=`${(route.distance/1000).toFixed(1)} km`;
+        distanceStat.append(distanceLabel, distanceValue);
+        const timeStat=document.createElement("div");
+        timeStat.className="itinerary-stat";
+        const timeLabel=document.createElement("span");
+        timeLabel.textContent="Estimated total travel time";
+        const timeValue=document.createElement("strong");
+        const totalMinutes=Math.round(route.duration/60);
+        timeValue.textContent=totalMinutes<60
+            ?`${totalMinutes} min`
+            :`${Math.floor(totalMinutes/60)} h ${totalMinutes%60} min`;
+        timeStat.appent(timeLabel,timeValue);
+        stats.append(distanceStat,timeStat);
+        const list=document.createElement("ol");
+        list.className="itinerary-stops";
+        stops.forEach(function(stop,index){
+            const item=document.createElement("li");
+            item.className="itinerary-stop";
+            const number=document.createElement("span");
+            number.className="itinerary-number";
+            number.textContent=String(index+1);
+            const content=document.createElement("div");
+            content.className="itinerary-stop-content";
+            const name=document.createElement("strong");
+            name.textContent=stop.name;
+            const details=document.createElement("small");
+            details.textContent=
+                `${categoryLabels[stop.category]} · ` +
+                (stop.address || "Address not available");
+            content.append(name,details);
+            if(route.legs[index]){
+                const leg=route.legs[index];
+                const legInfo=document.createElement("span");
+                legInfo.className="itinerary-leg";
+                const legDistance=(leg.distance/1000).toFixed(1);
+                const legMinutes=Math.round(leg.duration/60);
+                const modeLabel=leg.mode==="walking"
+                    ?"Walking"
+                    :"Driving";
+                legInfo.txtContent=`${modeLabel} · ${legDistance} km · about ${legMinutes} min`;
+                content.appendChild(legInfo);
+            }else{
+                const finalInfo=document.createElement("span");
+                finalInfo.className="itinerary-leg";
+                finalInfo.textContent="Final destination";
+                content.appendChild(finalInfo);
+            }
+            item.append(number,content);
+            list.appendChild(item);
+        });
+        container.append(header,stats,list);
+    }
+    function renderTransportOptions(){
+        const container=document.getElementById("leg-transport-options");
+        container.replaceChildren();
+        if(stops.length<2) return;
+        const heading=document.createElement("h3");
+        heading.textContent="Choose transport for each section";
+        container.appendChild(heading);
+        for(let i=0;i<stops.length-1;i++){
+            const section=document.createElement("div");
+            section.className="transport-section";
+            const label=document.createElement("label");
+            label.textContent=`${stops[i].name} → ${stops[i+1].name}`;
+            const select=document.createElement("select");
+            select.className="transport-mode";
+            select.dataset.leg=i;
+            const walking=document.createElement("option");
+            walking.value="walking";
+            walking.textContent="Walking";
+            const driving=document.createElement("option");
+            driving.value="driving";
+            driving.textContent="Driving";
+            driving.selected=true;
+            select.append(walking,driving);
+            section.append(label,select);
+            container.appendChild(section);
+        }
+        const applyButton=document.createElement("button");
+        applyButton.type="button";
+        applyButton.id="apply-transport";
+        applyButton.className="apply-transport-button";
+        applyButton.textContent="Apply transport choices";
+        applyButton.addEventListener("click", function(){
+            drawRoute();
+        });
+        container.appendChild(applyButton);
+    }
+    async function fetchLegRoute(start,end,mode){
+        const costing=mode==="walking"
+            ?"pedestrian"
+            :"auto";
+        const requestBody={
+            locations:[
+                {
+                    lat:start.coordinates[0],
+                    lon:start.coordinate[1]
+                },
+                {
+                    lat:end.coordinates[0],
+                    lon:end.coordinates[1]
+                }
+            ],
+            costing:costing,
+            units:"km",
+            format:"osrm",
+            shape_format:"geojson"
+        };
+        const response=await fetch(
+            "https://valhalla1.openstreetmap.de/route",
+            {
+                method:"POST",
+                headers:{
+                    "Content-type":"application/json"
+                },
+                body:JSON.stringify(requestBody)
+            }
+        );
+        if(!response.ok){
+            throw new Error(`${mode} routing service returned HTTP ${response.status}`);
+        }
+        const data=await response.json();
+        if(
+            !data.routes||
+            !data.routes.length||
+            !data.routes[0].geometry||
+            !data.routes[0].geometry.coordinates
+        ){
+            throw new Error(`No ${mode} route could be found.`);
+        }
+        const route=data.routes[0];
+        return{
+            mode:mode,
+            distance:route.distance*1000,
+            duration:route.duration,
+            geometry:route.geometry
+        };
+    }
+    async function drawRoute(){
+        const status=document.getElementById("places-status");
+        const applyButton=document.getElementById("apply-transport");
+        if(stops.length<2){
+            status.textContent="Select at least two places to build a route";
+            return;
+        }
+        const transportSelections=Array.from(document.querySelectorAll(".transport-mode"));
+        if(transportSelections.length!==stops.length-1){
+            status.textContent="Please choose transport for every section";
+            return;
+        }
+        const modes=transportSelections.map(function(select){
+            return select.value;
+        });
+        if(applyButton){
+            applyButton.disabled=true;
+            applyButton.textContent="Calculating route...";
+        }
+        status.textContent="Calculating your walking and driving routes...";
+        try{
+            const calculatedLegs=[];
+            for(let i=0;i<stops.length-1;i++){
+                status.textContent=`Calculating section ${i+1} of ${stops.length-1}...`;
+                const leg=await fetchLegRoute(
+                    stops[i],
+                    stops[i+1],
+                    modes[i]
+                );
+                calculatedLegs.push(leg);
+            }
+            const totalDistance=calculatedLegs.reduce(
+                (total,leg)=>total+leg.distance,
+                0
+            );
+            const totalDuration=calculatedLegs.reduce(
+                (total,leg)=>total+leg.duration,
+                0
+            );
+            const routeLayers=[];
+            calculatedLegs.forEach(function(leg){
+                const routeColor=leg.mode==="walking"
+                    ?"#e46b75"
+                    :"#7167d9"
+                const outline=L.geoJSON(leg.geometry,{
+                    style:{
+                        color:"#ffffff",
+                        weight:8,
+                        opacity:0.95,
+                        lineCap:"round",
+                        lineJoin:"round"
+                    }
+                });
+                const routeLine=L.geoJSON(leg.geometry,{
+                    style:{
+                        color:routeColor,
+                        weight:5,
+                        opacity:1,
+                        lineCap:"round",
+                        lineJoin:"round"
+                    }
+                });
+                routeLayers.push(outline,routeLine);
+            });
+            if(routeLayer){
+                map.removeLayer(routeLayer);
+            }
+            routeLayer=L.featureGroup(routeLayers).addTo(map);
+            const boundsLayers=[
+                routeLayer,
+                ...selectedMarkers.filter(Boolean)
+            ];
+            const allStops=L.featureGroup(boundsLayers);
+            map.fitBounds(allStops.getBounds(),{
+                padding:[35,35],
+                maxZoom:15
+            });
+            const combinedRoute={
+                distance:totalDistance,
+                duration:totalDuration,
+                legs:calculatedLegs
+            };
+            renderRoutesItinerary(combinedRoute);
+            status.textContent="Your mixed transport route is ready";
+        }catch(error){
+            console.error("Error building route:", error);
+            status.textContent=error.message||"Could not build the route. Please try again.";
+        }finally{
+            if(applyButton){
+                applyButton.disabled=false;
+                applyButton.textContent="Apply transport choices";
+            }
+        }
+    }
     document
         .getElementById("build-route")
         .addEventListener("click",function(){
             const selectedIndexes=Array.from(
-                document.querySelectorAll('#places-list input[type="checkbox"]:checked')
+                document.querySelectorAll(
+                    '#places-list input[type="checkbox"]:checked'
+                )
             ).map(function(checkbox){
                 return Number(checkbox.value);
             });
@@ -580,11 +928,17 @@
                 return markers[index];
             });
             if(stops.length<2){
-                document.getElementById("places-status").textContent="Select at least two places to build a route";
+                document.getElementById("places-status").textContent=
+                    "Select at least two places to build a route.";
                 return;
             }
+            if(routeLayer){
+                map.removeLayer(routeLayer);
+                routeLayer=null;
+            }
+            document.getElementById("route-itinerary").replaceChildren();
             renderTransportOptions();
-            drawRoute();
+            document.getElementById("places-status").textContent="Choose transport for each section, then apply your choices";
         });
     const form = document.getElementById('trip-form');
     const summary = document.getElementById('trip-summary');
@@ -622,3 +976,4 @@
         const nextTheme=currentTheme==="dark"?"light":"dark";
         applyTheme(nextTheme);
     });
+    startLiveLocation();

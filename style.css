@@ -167,7 +167,7 @@ button:hover{
 .travel-popup .leaflet-popup-content{
     margin:14px 16px;
     font-family:Arial, sans-serif;
-    color:#20302b;
+    color:#dcd8ff;
 }
 .stop-popup-number{
     color:#23775b;
@@ -475,7 +475,7 @@ button:hover{
     background:rgba(255,255,255,0.22);
 }
 body[data-theme="dark"]{
-    background-color:#121a17;
+    background-color:#171725;
     color:#e5eee8;
 }
 body[data-theme="dark"] .trip-form,
@@ -703,9 +703,9 @@ body[data-theme="dark"]{
 body[data-theme="dark"] .trip-form,
 body[data-theme="dark"] .map-section,
 body[data-theme="dark"] .route-itinerary{
-    background: color #222235;
-    border-color:#39394f;
-    color:#ecebfa;
+    background: color #222235 !important;
+    border-color:#39394f !important;
+    color:#ecebfa !important;
 }
 body[data-theme="dark"] .map-section h2,
 body[data-theme="dark"] .category-filters legend,
@@ -735,7 +735,7 @@ body[data-theme="dark"] textarea::placeholder{
 body[data-theme="dark"] .category-filters{
     border-color:#494963;
 }
-body[dark-theme="dark"] .place-result{
+body[data-theme="dark"] .place-result{
     background-color:#2b2b41;
     border-color: #494963;
 }
@@ -763,16 +763,24 @@ body[data-theme="dark"] .leaflet-control-zoom a{
 body[data-theme="dark"] .leaflet-control-zoom a:hover{
     background:#393653 !important;
 }
-body[data-theme="dark"] .travel-popup .leaflet-popup-ccontent-wrapper,
+body[data-theme="dark"] .travel-popup .leaflet-popup-content-wrapper,
 body[data-theme="dark"] .travel-popup .leaflet-popup-tip{
-    background:#222235;
-    color: #ecebfa;
+    background:#222235 !important;
+}
+body[data-theme="dark"] .travel-popup .leaflet-popup-content{
+        color: #ecebfa !important;
+}
+body[data-theme="dark"] .stop-popup-number{
+    color:#a99ff5 !important;
 }
 body[data-theme="dark"] .stop-popup h3{
-    color:#dcd8ff;
+    color:#dcd8ff !important;
 }
 body[data-theme="dark"] .stop-popup p{
-    color: #b4b2ce;
+    color: #b4b2ce !important;
+}
+body[data-theme="dark"] .travel-popup .leaflet-popup-close-button{
+    color:#ecebfa !important;
 }
 body:not([data-theme="dark"]) .trip-form{
     background:#ffffff !important;
@@ -841,4 +849,100 @@ body[data-theme="dark"] .leaflet-popup-close-button{
 }
 body[data-theme="dark"] .leaflet-popup-close-button:hover{
     color:#e46b75 !important;
+}
+.user-location-icon{
+    background:transparent;
+    border:none;
+}
+.user-location-pulse{
+    width:24px;
+    height:24px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:50%;
+    background:rgba(66,133,244,0.20);
+    animation:location-pulse 2s infinite;
+}
+.user-location-dot{
+    width:13px;
+    height:13px;
+    background:#4285f4;
+    border:3px solid white;
+    border-radius:50%;
+    box-shadow:0 1px 5px rgba(0,0,0,0.35);
+}
+@keyframes location-pulse{
+    0%{
+        box-shadow: 0 0 0 0 rgba(66,133,244,0.35);
+    }
+    70%{
+        box-shadow: 0 0 0 10px rgba(66,133,244,0.35);
+    }
+    100%{
+        box-shadow: 0 0 0 0 rgba(66,133,244,0);
+    }
+}
+.locate-me-button{
+    background:#ffffff;
+    color:#25264a;
+    border:1px solid #dedcf0;
+    border-radius:10px;
+    width:34px;
+    height:34px;
+    padding:6px 8px;
+    font-size:11px;
+    font-weight:600;
+    cursor:pointer;
+    align-items:center;
+    justify-content:center;
+    display:flex;
+    box-shadow:0 2px 8px rgba(0,0,0,0.15);
+    transition:all 0.2s ease;
+}
+.locate-me-button:hover{
+    background:#f0eeff;
+    border-color:#a99ff5;
+    transform:translateY(-1px);
+}
+body[data-theme="dark"] .locate-me-button{
+    background:#222235;
+    color:#dcd8ff;
+    border-color:#45445f;
+}
+body[data-theme="dark"] .locate-me-button:hover{
+    background:#33324d;
+}
+.locate-arrow{
+    display:inline-block;
+    transform:rotate(-35deg);
+    font-size:20px;
+}
+.apply-transport-button{
+    display:block;
+    width:100%;
+    margin-top:16px;
+    padding:11px 16px;
+    border:none;
+    border-radius:9px;
+    background:#7167d9;
+    color:white;
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    transition:background 0.2s ease,opacity 0.2s ease;
+}
+.apply-transport-button:hover{
+    background:#5e54c5;
+}
+.apply-transport-button:disabled{
+    opacity:0.6;
+    cursor:wait;
+}
+body[data-theme="dark"] .apply-transport-button{
+    background:#8a80e8;
+    color:#171725;
+}
+body[data-theme="dark"] .apply-transport-button:hover{
+    background:#a99ff5;
 }
