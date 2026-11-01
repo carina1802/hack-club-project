@@ -946,3 +946,201 @@ body[data-theme="dark"] .apply-transport-button{
 body[data-theme="dark"] .apply-transport-button:hover{
     background:#a99ff5;
 }
+:root {
+    --primary: #7167D9;
+    --primary-dark: #5E54C5;
+    --lavender: #A99FF5;
+    --coral: #E46B75;
+
+    --page-bg: #F5F4FA;
+    --surface: #FFFFFF;
+    --surface-soft: #F0EFF8;
+
+    --text-main: #25264A;
+    --text-muted: #77768F;
+
+    --border: #E8E6F1;
+
+    --shadow-soft: 0 4px 18px rgba(37, 38, 74, 0.06);
+    --shadow-hover: 0 10px 28px rgba(37, 38, 74, 0.12);
+}
+/* Main page */
+body {
+    background: var(--page-bg);
+    color: var(--text-main);
+    font-family: "Inter", "Segoe UI", sans-serif;
+    line-height: 1.6;
+}
+
+/* Smooth transitions */
+
+button,
+input,
+select,
+textarea,
+.place-result,
+.card {
+    transition: all 0.22s ease;
+}
+header {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 2px 12px rgba(37, 38, 74, 0.04);
+}
+header h1 {
+    color: var(--text-main);
+    letter-spacing: -0.8px;
+}
+section,
+.card,
+.places-panel,
+.route-panel {
+    border-radius: 18px;
+}
+.card,
+.place-result,
+.places-panel,
+.route-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-soft);
+}
+.card:hover,
+.place-result:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-hover);
+}
+input,
+select,
+textarea {
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface);
+    color: var(--text-main);
+    padding: 11px 13px;
+    outline: none;
+}
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(113, 103, 217, 0.13);
+}
+button {
+    border-radius: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+button:hover {
+    transform: translateY(-1px);
+}
+button:active {
+    transform: scale(0.98);
+}
+#search-places,
+#build-route {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+}
+#search-places:hover,
+#build-route:hover {
+    background: var(--primary-dark);
+    box-shadow: 0 5px 14px rgba(113, 103, 217, 0.22);
+}
+.place-result {
+    padding: 15px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+}
+.place-result h3 {
+    color: var(--text-main);
+    font-size: 15px;
+    margin-bottom: 5px;
+}
+.place-result p {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+#map {
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-soft);
+}
+#route-itinerary {
+    border-radius: 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+    box-shadow: var(--shadow-soft);
+}
+#route-itinerary h2,
+#route-itinerary h3 {
+    color: var(--text-main);
+}
+#route-itinerary p {
+    color: var(--text-muted);
+}
+.transport-mode {
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+}
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #C9C5E3;
+    border-radius: 20px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+}
+body[data-theme="dark"] {
+    --page-bg: #171725;
+    --surface: #222235;
+    --surface-soft: #2B2B41;
+
+    --text-main: #ECEBFA;
+    --text-muted: #B4B2CE;
+
+    --border: #38384F;
+
+    --shadow-soft: 0 4px 18px rgba(0, 0, 0, 0.16);
+    --shadow-hover: 0 10px 28px rgba(0, 0, 0, 0.25);
+
+    background: var(--page-bg);
+    color: var(--text-main);
+}
+body[data-theme="dark"] header {
+    background: rgba(34, 34, 53, 0.92);
+    border-color: var(--border);
+}
+body[data-theme="dark"] header h1,
+body[data-theme="dark"] .place-result h3,
+body[data-theme="dark"] #route-itinerary h2,
+body[data-theme="dark"] #route-itinerary h3 {
+    color: var(--text-main);
+}
+body[data-theme="dark"] input,
+body[data-theme="dark"] select,
+body[data-theme="dark"] textarea {
+    background: var(--surface-soft);
+    color: var(--text-main);
+    border-color: var(--border);
+}
+body[data-theme="dark"] .card,
+body[data-theme="dark"] .place-result,
+body[data-theme="dark"] .places-panel,
+body[data-theme="dark"] .route-panel,
+body[data-theme="dark"] #route-itinerary {
+    background: var(--surface);
+    border-color: var(--border);
+}
