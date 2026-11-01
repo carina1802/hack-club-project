@@ -24,6 +24,40 @@
         restaurant:"Restaurant",
         cafe:"Café"
     }
+    function calculateDistance(lat1,lon1,lat2,lon2){
+        const earthRadius=6371;
+        const toRadians=degrees=>degrees*Math.PI/180;
+        const dLat=toRadians(lat2-lat1);
+        const dLon=toRadians(lon2-lon1);
+        const a=
+            Math.sin(dLat/2)**2+
+            Math.cos(toRadians(lat1))*
+            Math.cos(toRadians(lat2))*
+            Math.sin(dLon/2)**2;
+        return 2* earthRadius*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    }
+    function getCurrentLocation(){
+        return new Promise(resolve=>{
+            if(!navigator.geolocation){
+                resolve(null);
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    resolve({
+                        lat:position.coords.latitude,
+                        lon:position.coords.longitude
+                    });
+                },
+                ()=>resolve(null),
+                {
+                    enableHighAccuracy:false,
+                    timeout:5000,
+                    maximumAge:60000
+                }
+            );
+        });
+    }
     function getPlaceCategory(tags){
         if(tags.tourism==="museum") return "museum";
         if(tags.amenity==="restaurant") return "restaurant";
@@ -65,7 +99,13 @@
             const name=document.createElement("strong");
             name.textContent=place.name;
             const details=document.createElement("small");
-            details.textContent=`${categoryLabels[place.category]} · ` + (place.address||"Address not available");
+            const distanceText=Number.isFinite(place.distance)
+                ?` · ${place.distance.toFixed(1)} km away`
+                : "";
+            details.textContent=
+                `${categoryLabels[place.category]} · ` +
+                (place.address || "Address not available") +
+                distanceText;
             label.append(name,details);
             card.append(checkbox,label);
             placeList.appendChild(card);
@@ -105,45 +145,48 @@
     }
     async function fetchOverpassWithRetry(query){
         const endpoints=[
-            "https://overpass-api.de/api/interpreter",
-            "https://overpass.kumi.systems/api/interpreter",
-            "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+            "https://overpass.private.coffee/api/interpreter",
+            "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+            "https://overpass-api.de/api/interpreter"
         ];
-        let lastError;
+        let lastError=null;
         for(const endpoint of endpoints){
+            const controller=new AbortController();
+            const timeoutId=setTimeout(()=>controller.abort(),22000);
             try{
-                const controller=new AbortController();
-                const timeoutId=setTimeout(()=>controller.abort(),20000);
-                try{
-                    const response=await fetch(endpoint,{
-                        method:"POST",
-                        headers:{
-                            "Content-Type":
-                                "application/x-www-form-urlencoded;charset=UTF-8",
-                            "Accept": "application/json"
-                        },
-                        body: new URLSearchParams({data:query}),
-                        signal:controller.signal
-                    });
-                    if(!response.ok){
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-                    const data=await response.json();
-                    if(!Array.isArray(data.elements)){
-                        throw new Error("Invalid response from places service");
-                    }
-                    return data;
-                }finally{
-                    clearTimeout(timeoutId);
+                 const response=await fetch(endpoint,{
+                    method:"POST",
+                    headers:{
+                        "Content-Type":
+                            "application/x-www-form-urlencoded;charset=UTF-8",
+                    },
+                    body: new URLSearchParams({data:query}),
+                    signal:controller.signal
+                });
+                if(!response.ok){
+                    throw new Error(`HTTP ${response.status}`);
                 }
+                const data=await response.json();
+                if(data.remark){
+                    throw new Error(data.remark);
+                }
+                if(!Array.isArray(data.elements)){
+                    throw new Error("Inavlid response from places server");
+                }
+                console.info(`Places loaded successfully from ${endpoint}`);
+                return data;
             }catch(error){
                 lastError=error;
                 console.warn(
-                    `Places server failed (${endpoint}):`,
-                    error.message
+                    `Places erver failed:${endpoint}`,
+                    error.name==="AbortError"
+                        ? "Request timed out"
+                        : error.message
                 );
+            }finally{
+                clearTimeout(timeoutId);
             }
-        }throw new Error("All places sedrvers are currently unavailable. Please try again.");
+        }throw new Error("All places servers failed. Please wait a moment and try again.");
     }
     async function searchPlaces(){
         const destination=document.getElementById("destination").value.trim();
@@ -183,6 +226,12 @@
             const city=cityResults[0];
             const lat=Number(city.lat);
             const lon=Number(city.lon);
+            status.textContent="Checking location permission and searching for places...";
+            const currentLocation=await getCurrentLocation();
+            const sortOrigin=currentLocation||{
+                lat:lat,
+                lon:lon
+            };
             map.setView([lat,lon],13);
             const categoryFilters={
                 attraction:'["tourism"="attraction"]',
@@ -197,57 +246,22 @@
             const failedCategories=[];
             if(selectedQueries.length>0){
                 const overpassQuery=
-                    "[out:json][timeout:20];\n(" +
+                    "[out:json][timeout:25];\n(" +
                     selectedQueries.join("\n") +
-                    "\n);\nout center tags 250;";
+                    "\n);\nout center;";
                 try{
                     status.textContent=`Searching ${selectedCategories.length} categories in ${destination}...`;
                     const data=await fetchOverpassWithRetry(overpassQuery);
                     allElements.push(...data.elements);
                 }catch(error){
                     console.error("All place-search servers failed:",error);
-                    failedCategories.push(...selectedCategories);
+                    status.textContent=
+                        "The places service is temporarily unavailable." +
+                        "Please try again in a moment."
+                    return;
                 }
 
-            }
-            /*const categoryQueries={
-                attraction:
-                    `nwr(around:2000,${lat},${lon})`+
-                    `["tourism"="attraction"];`,
-                museum:
-                    `nwr(around:2000,${lat},${lon})`+
-                    `["tourism"="museum"];`,
-                restaurant:
-                    `nwr(around:2000,${lat},${lon})` +
-                    `["amenity"="restaurant"];`,
-                cafe:
-                    `nwr(around:2000,${lat},${lon})` +
-                    '["amenity"="cafe"];'
-            };
-            const resultLimitPerCategory=60;
-            const allElements=[];
-            const failedCategories=[];
-            const endpoint="https://maps.mail.ru/osm/tools/overpass/api/interpreter";
-            for(const category of selectedCategories){
-                const categoryQwery=categoryQueries[category];
-                if(!categoryQwery) continue;
-                const overpassQuery=
-                    `[out:json][timeout:25];\n(` +
-                    categoryQwery +
-                    `\n);\nout center tags ${resultLimitPerCategory};`;
-                try{
-                    const data=await fetchOverpassWithRetry(overpassQuery);
-                    const categoryElements=data.elements ||[];
-                    console.log(`${categoryLabels[category]}:${categoryElements.length} results`);
-                    allElements.push(...categoryElements);
-                } catch (error){
-                    console.error(
-                        `Failed to load ${categoryLabels[category]}:`,
-                        error.message
-                    );
-                    failedCategories.push(category);
-                }
-            }*/
+            }           
             const uniqueElements=[
                 ...new Map(
                     allElements.map(element=>[
@@ -280,13 +294,36 @@
                         Number(latitude),
                         Number(longitude)
                     ],
-                    address:[
-                        tags["addr:street"],
-                        tags["addr:housenumber"],
-                        tags["addr:city"]
-                    ].filter(Boolean).join(" ")
+                    address:
+                        tags["addr:full"] ||
+                        [
+                            tags["addr:housenumber"],
+                            tags["addr:street"]
+                        ].filter(Boolean).join(" ")||
+                        [
+                            tags["addr:place"],
+                            tags["addr:suburb"]||
+                                tags["addr:neighbourhood"],
+                            tags["addr:city"]||
+                                tags["addr:town"]||
+                                tags["addr:village"],
+                            tags["addr:postcode"]
+                        ].filter(Boolean).join(", ")||
+                        tags["description"]||
+                        ""
                 };
             }).filter(Boolean);
+            foundPlaces.forEach(function(place){
+                place.distance=calculateDistance(
+                    sortOrigin.lat,
+                    sortOrigin.lon,
+                    place.coordinates[0],
+                    place.coordinates[1]
+                );
+            });
+            foundPlaces.sort(function(a,b){
+                return a.distance - b.distance;
+            });
             if(routeLayer){
                 map.removeLayer(routeLayer);
                 routeLayer=null;
@@ -320,68 +357,7 @@
     document
         .getElementById("search-places")
         .addEventListener("click",searchPlaces);
-    /*async function drawRoute(){
-        if(stops.length<2){
-            document.getElementById("places-status").textContent="Select at least two places to build a route";
-            return;
-        }
-        const routeCoordinates=stops.map(function(stop){
-        return stop.coordinates[1]+","+stop.coordinates[0];
-        }).join(";");
-        const url="https://router.project-osrm.org/route/v1/driving/"+routeCoordinates+"?overview=full&geometries=geojson";
-        try{
-            const response=await fetch(url);
-            if(!response.ok){
-                throw new Error("Routing device request failed");
-            }
-            const data=await response.json();
-            if(data.code !=="Ok"||!data.routes.length){
-                throw new Error("No route found");
-            }
-            const route=data.routes[0];
-            if(routeLayer){
-                map.removeLayer(routeLayer);
-            }
-            const routeOutline=L.geoJSON(route.geometry,{
-                style:{
-                    color:'#ffffff',
-                    weight:9,
-                    opacity:0.9,
-                    lineCap:'round',
-                    lineJoin:'round'
-                }
-            });
-            const routeLine=L.geoJSON(route.geometry,{
-                style:{
-                    color:'#23775b',
-                    weight:5,
-                    opacity:1,
-                    lineCap:'round',
-                    lineJoin:'round'
-                }
-            });
-            routeLayer=L.featureGroup([
-                routeOutline,
-                routeLine
-            ]).addTo(map);
-            const allStops=L.featureGroup([
-                routeLayer,
-                ...selectedMarkers
-            ]);
-            map.fitBounds(allStops.getBounds(),{
-                padding:[30,30],
-                maxZoom:14
-            });
-            const distance = (route.distance/1000).toFixed(2);
-            const duration = Math.round(route.duration/60);
-
-            console.log("Route distance:"+distance+"km");
-            console.log("Estimated driving time:"+duration+"minutes");
-        }catch(error){
-            console.error("Error fetching route:",error);
-        }
-    }*/
-    function renderRoutesitinerary(route,optimized){
+    function renderRoutesItinerary(route,optimized){
         const container=document.getElementById("route-itinerary");
         container.replaceChildren();
         const header=document.createElement("div");
@@ -394,7 +370,7 @@
             :"Stops in your selected order";
         header.append(title,subtitle);
         const stats=document.createElement("div");
-        stats.className="itinerary-status";
+        stats.className="itinerary-stats";
         const distanceStat=document.createElement("div");
         distanceStat.className="itinerary-stat";
         const distanceLabel=document.createElement("span");
@@ -447,6 +423,33 @@
             list.appendChild(item);
         });
         container.append(header,stats,list);
+    }
+    function renderTransportOptions(){
+        const container=document.getElementById("leg-transport-options");
+        container.replaceChildren();
+        if(stops.length<2) return;
+        const heading = document.createElement("h3");
+        heading.textContent = "Choose transport for each section"
+        container.appendChild(heading);
+        for(let i=0;i<stops.length-1;i++){
+            const section=document.createElement("div");
+            section.className="transport-section";
+            const label=document.createElement("label");
+            label.textContent=`${stops[i].name} → ${stops[i+1].name}`;
+            const select=document.createElement("select");
+            select.className="transport-mode";
+            select.dataset.leg=i;
+            const walking=document.createElement("option");
+            walking.value="walking";
+            walking.textContent="Walking";
+            const driving=document.createElement("option");
+            driving.value="driving";
+            driving.textContent="Driving";
+            driving.selected=true;
+            select.append(walking, driving);
+            section.append(label,select);
+            container.appendChild(section);
+        }
     }
     async function drawRoute(){
         const status=document.getElementById("places-status");
@@ -551,7 +554,7 @@
                 padding:[35,35],
                 maxZoom:15
             });
-            renderRoutezitinerary(route,optimized);
+            renderRoutesItinerary(route,optimized);
             const distance=(route.distance/1000).toFixed(2);
             const duration=Math.round(route.duration/60);
             status.textContent=optimized
@@ -580,6 +583,7 @@
                 document.getElementById("places-status").textContent="Select at least two places to build a route";
                 return;
             }
+            renderTransportOptions();
             drawRoute();
         });
     const form = document.getElementById('trip-form');
